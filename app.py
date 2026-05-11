@@ -1946,7 +1946,7 @@ def render_signup_panel():
                 </div>
             </div>
             <div class="auth-mode-note">
-                프로토타입 환경에서는 의료진 코드 승인 버튼을 누르면 입력한 코드가 항상 승인됩니다.
+                의료진 승인 코드는 관리자 요청을 통해 발급 받을 수 있습니다.
             </div>
             """,
             unsafe_allow_html=True,
