@@ -16,9 +16,51 @@ def load_and_preprocess():
 
     df = pd.read_csv(DATA_PATH)
     
-    # 1. 날짜 데이터 미리 변환 및 기준일 설정
+    # 1. fMRI 경로 절대 경로화 (가장 중요)
+    if 'LOCAL_FMRI_PATH' in df.columns:
+        def make_abs_path(p):
+            if pd.isna(p): return p
+    
+            # 1. p가 이미 'data/'로 시작하는지 확인하거나, 아니면 중간에 'data'를 삽입합니다.
+            if p.startswith('data/'):
+                full_p = os.path.normpath(os.path.join(BASE_DIR, p))
+            else:
+                # p가 'fmri_data/...'로 시작하는 경우 'data'를 중간에 끼워 넣음
+                full_p = os.path.normpath(os.path.join(BASE_DIR, "data", p))
+            
+            return full_p.replace('\\', '/')
+        
+        df['LOCAL_FMRI_PATH'] = df['LOCAL_FMRI_PATH'].apply(make_abs_path)
+
+    # 2. 날짜 데이터 변환
     df['VISDATE'] = pd.to_datetime(df['VISDATE'], errors='coerce')
     baseline_dates = df.groupby('PTID')['VISDATE'].transform('min')
+
+    # 3. 하이브리드 VISCODE 처리 함수
+    def parse_viscode_custom(row):
+        code = str(row['VISCODE']).lower().strip()
+        if code == 'bl': return 0
+        elif code.startswith('m'):
+            try: return int(code.replace('m', ''))
+            except ValueError: pass
+        
+        if pd.notna(row['VISDATE']) and pd.notna(baseline_dates[row.name]):
+            diff_days = (row['VISDATE'] - baseline_dates[row.name]).days
+            return int(round(diff_days / 30.0))
+        return 0
+
+    df['MONTHS'] = df.apply(parse_viscode_custom, axis=1)
+
+    # 4. 학력 보정 및 증상 수치화
+    df['ADJUSTED_MMSE'] = df.apply(
+        lambda x: get_adjusted_mmse(x['MMSE_SCORE'], x['EDUCATION_LEVEL']), axis=1
+    )
+
+    symptom_cols = [col for col in df.columns if col.startswith('AX')]
+    for col in symptom_cols:
+        df[col] = df[col].fillna(1).apply(lambda x: 1 if x == 2 else 0)
+
+    return df
 
     # 2. 하이브리드 VISCODE 처리 함수
     def parse_viscode_custom(row):

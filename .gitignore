@@ -4,8 +4,6 @@ fMRI_data/
 
 # [Model] AI 엔진이 생성한 인덱스 파일 및 모델 가중치
 model/*.npy
-model/*.pth
-model/*.h5
 
 # [Python] 파이썬 실행 시 생성되는 캐시 및 가상환경
 __pycache__/
