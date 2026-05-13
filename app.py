@@ -856,6 +856,7 @@ def apply_custom_css():
 
         .stTextInput input,
         .stDateInput input,
+        .stNumberInput input,
         textarea,
         div[data-baseweb="select"] > div {
             border-radius: 14px !important;
@@ -868,6 +869,7 @@ def apply_custom_css():
 
         .stTextInput input:focus,
         .stDateInput input:focus,
+        .stNumberInput input:focus,
         textarea:focus {
             border-color: #55BEE8 !important;
             box-shadow: 0 0 0 3px rgba(85, 190, 232, 0.18) !important;
@@ -915,6 +917,44 @@ def apply_custom_css():
             border-color: rgba(11, 111, 184, 0.32) !important;
             color: var(--az-primary-dark) !important;
             box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07) !important;
+        }
+
+        .mmse-guide-card {
+            height: 100%;
+            padding: 0.92rem 1rem;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(233,245,255,0.78), rgba(234,249,247,0.72));
+            border: 1px solid rgba(11, 111, 184, 0.12);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.68);
+        }
+
+        .mmse-guide-card h4 {
+            margin: 0;
+            color: var(--az-text);
+            font-size: 0.96rem;
+            font-weight: 900;
+            letter-spacing: -0.03em;
+        }
+
+        .mmse-guide-card p {
+            margin: 0.34rem 0 0 0;
+            color: var(--az-muted);
+            font-size: 0.84rem;
+            line-height: 1.55;
+            word-break: keep-all;
+        }
+
+        .mmse-score-note {
+            margin-top: 0.52rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.34rem 0.58rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.72);
+            color: var(--az-primary-dark);
+            font-size: 0.76rem;
+            font-weight: 850;
         }
 
         div[data-testid="stFileUploaderDropzone"] {
@@ -2551,6 +2591,9 @@ def patient_detail_page():
 
     for idx, record in enumerate(reversed(history), start=1):
         with st.expander(f"{idx}. 진단 일시: {record['diagnosis_datetime']}", expanded=(idx == 1)):
+            mmse_score = record.get("mmse_score")
+            mmse_text = f"{mmse_score}/30" if mmse_score is not None else "기록 없음"
+            st.write(f"**MMSE 점수:** {mmse_text}")
             st.write(f"**입력 증상:** {', '.join(record['symptoms'])}")
             st.write(f"**fMRI 파일명:** {record['fmri_filename']}")
 
@@ -2610,7 +2653,7 @@ def ai_diagnosis_page():
     section_title("선택된 환자 프로필", "진단 입력 전 환자 정보를 확인합니다.", "Selected Patient")
     render_patient_profile_cards(patient)
 
-    section_title("진단 입력", "증상과 fMRI 이미지를 입력하여 유사 사례 매칭을 실행합니다.", "Diagnosis Input")
+    section_title("진단 입력", "MMSE 점수, 증상, fMRI 이미지를 입력하여 유사 사례 매칭을 실행합니다.", "Diagnosis Input")
 
     symptom_options = [
         {"code": "AXNAUSEA", "label": "메스꺼움"},
@@ -2646,6 +2689,33 @@ def ai_diagnosis_page():
     selected_symptoms = []
 
     with st.container(border=True):
+        st.write("**간이 정신상태검사(MMSE)**")
+        mmse_input_col, mmse_guide_col = st.columns([0.35, 0.65], vertical_alignment="center")
+
+        with mmse_input_col:
+            mmse_score = st.number_input(
+                "MMSE 점수",
+                min_value=0,
+                max_value=30,
+                value=24,
+                step=1,
+                help="0~30점 범위로 입력합니다. 점수가 낮을수록 인지 장애 가능성이 커질 수 있습니다.",
+                key=f"mmse_score_{patient['id']}",
+            )
+
+        with mmse_guide_col:
+            st.markdown(
+                """
+                <div class="mmse-guide-card">
+                    <h4>MMSE 입력 안내</h4>
+                    <p>시간·장소 지남력, 기억, 주의·계산, 언어 능력 등을 종합 평가하는 0~30점 척도입니다.</p>
+                    <div class="mmse-score-note">낮은 점수일수록 인지 저하 가능성 증가</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("---")
         st.write("**증상 체크박스**")
         symptom_cols = st.columns(4)
 
@@ -2684,10 +2754,12 @@ def ai_diagnosis_page():
                 fmri_file.seek(0)
 
             with st.spinner("유사 사례 매칭 결과를 생성하는 중입니다..."):
-                ai_result = run_ai_diagnosis(patient_profile, selected_symptoms, fmri_file)
+                ai_result = run_ai_diagnosis(patient_profile, selected_symptoms, fmri_file, int(mmse_score))
 
             diagnosis_result = {
                 "diagnosis_datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "mmse_score": int(mmse_score),
+                "mmse_max_score": 30,
                 "symptoms": selected_symptoms,
                 "fmri_filename": fmri_file.name if fmri_file is not None else "업로드 없음",
                 "similar_patients": ai_result["similar_patients"],
@@ -2711,7 +2783,7 @@ def ai_diagnosis_page():
 # -----------------------------
 # 8. AI 진단 mock/stub 함수
 # -----------------------------
-def run_ai_diagnosis(patient_profile, symptoms, fmri_file):
+def run_ai_diagnosis(patient_profile, symptoms, fmri_file, mmse_score):
     """
     AI 진단 지원 함수입니다.
 
@@ -2719,7 +2791,7 @@ def run_ai_diagnosis(patient_profile, symptoms, fmri_file):
     나중에 팀원이 만든 AI 모델 함수 또는 API로 교체할 때는 이 함수 내부만 수정하면 됩니다.
 
     예시 교체 위치:
-    - model_result = team_model.predict(patient_profile, symptoms, fmri_file)
+    - model_result = team_model.predict(patient_profile, symptoms, fmri_file, mmse_score)
     - 또는 requests.post(AI_API_URL, files=..., json=...) 호출
     """
 
@@ -2757,6 +2829,7 @@ def run_ai_diagnosis(patient_profile, symptoms, fmri_file):
     return {
         "patient_profile": patient_profile,
         "input_symptoms": symptoms,
+        "input_mmse_score": mmse_score,
         "fmri_filename": fmri_file.name if fmri_file is not None else None,
         "similar_patients": mock_similar_patients,
     }
@@ -2823,6 +2896,21 @@ def render_diagnosis_result(diagnosis_result):
     """AI 진단 결과를 카드와 표 형태로 표시합니다."""
     section_title("AI 진단 지원 결과", "추천 유사 환자와 유사도 점수를 확인합니다.", "Matching Result")
     st.warning("이 결과는 데모용 AI 진단 지원 결과이며 실제 의학적 진단을 대체하지 않습니다.")
+
+    mmse_score = diagnosis_result.get("mmse_score")
+    if mmse_score is not None:
+        st.markdown(
+            f"""
+            <div class="result-card">
+                <div class="result-card-head">
+                    <h4>입력 인지 평가</h4>
+                    <span class="score-pill">MMSE {safe_text(mmse_score)}/30</span>
+                </div>
+                <p class="small-muted">간이 정신상태검사 점수는 유사 사례 매칭 입력값으로 함께 반영되었습니다.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     for idx, item in enumerate(diagnosis_result["similar_patients"], start=1):
         score_text = item["similarity_score"]
