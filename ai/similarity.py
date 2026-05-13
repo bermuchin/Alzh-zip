@@ -59,5 +59,11 @@ class SimilarityEngine:
         target_df['similarity_score'] = (clinical_score * 0.7) + (image_score * 0.3)
         
         # --- [STEP 4] 결과 반환 ---
-        top_3 = target_df.sort_values(by='similarity_score').head(3)
-        return top_3.to_dict('records')
+        top_3 = target_df.sort_values(by='similarity_score').head(3).to_dict('records')
+    
+        # 후처리 모듈 연결
+        from ai.postprocessing import PostProcessor
+        post_processor = PostProcessor(self.db)
+        detailed_results = post_processor.process_details(input_data, input_img_path, top_3)
+    
+        return detailed_results
