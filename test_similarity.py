@@ -24,12 +24,12 @@ def test_recommendation():
     sample_img_path = os.path.join("data", "fmri_data", "002_S_0295", "m06.png")
     
     if not os.path.exists(sample_img_path):
-        print(f"⚠️ 테스트용 이미지가 없습니다: {sample_img_path}")
+        print(f"테스트용 이미지가 없습니다: {sample_img_path}")
         print("실제 존재하는 이미지 경로로 수정 후 다시 시도해주세요.")
         return
 
     # 4. 유사 환자 검색 실행
-    print("🔎 가장 유사한 환자 3명을 찾는 중...")
+    print("유사한 환자 top 3 찾는 중...")
     recommendations = engine.find_top_3_similar(test_input_data, sample_img_path)
     
     # 5. 결과 출력
@@ -38,13 +38,17 @@ def test_recommendation():
     print("="*50)
     
     for i, res in enumerate(recommendations):
+        summary = res['summary']
+        
         print(f"\n[{i+1}순위 유사 환자]")
-        print(f" - 환자 ID: {res['PTID']}")
-        print(f" - 방문 시점: {res['MONTHS']}개월 차")
-        print(f" - 학력 수준: {res['EDUCATION_LEVEL']}")
-        print(f" - 보정 MMSE: {res['ADJUSTED_MMSE']}")
-        print(f" - 유사도 점수: {res['similarity_score']:.4f} (낮을수록 정확)")
-        print(f" - fMRI 이미지 경로: {res['LOCAL_FMRI_PATH']}")
+        print(f" - 환자 ID: {summary['ptid']}")
+        print(f" - 방문 시점: {summary['matched_month']}개월 차")
+        print(f" - 유사도 점수: {summary['similarity']}% (높을수록 유사)")
+        print(f" - 보정 MMSE: {summary['mmse']}")
+        
+        # 상세 데이터 포함 여부 확인 (테스트용)
+        print(f" - 공통 증상: {', '.join(res['symptoms']['common'])}")
+        print(f" - fMRI 시퀀스: {len(res['fmri_display']['sequence']['paths'])}장 확보됨")
         
     print("\n" + "="*50)
 

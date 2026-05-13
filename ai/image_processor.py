@@ -1,5 +1,6 @@
 import torch
 import torchvision.models as models
+from torchvision.models import resnet18, ResNet18_Weights
 import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
@@ -7,7 +8,7 @@ import numpy as np
 class ImageFeatureExtractor:
     def __init__(self):
         # 사전 학습된 ResNet18 로드 (의료 영상의 기본 특징 포착 능력이 좋음)
-        self.model = models.resnet18(pretrained=True)
+        self.model = models.resnet18(weights=ResNet18_Weights.DEFAULT)
         # 마지막 분류 레이어를 제거하여 '특징 추출기'로만 사용
         self.model = torch.nn.Sequential(*(list(self.model.children())[:-1]))
         self.model.eval()
