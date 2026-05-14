@@ -2589,6 +2589,7 @@ def patient_detail_page():
         st.info("아직 진단 이력이 없습니다.")
         return
 
+    # 최신 진단이 위로 오도록 역순 출력
     for idx, record in enumerate(reversed(history), start=1):
         with st.expander(f"{idx}. 진단 일시: {record['diagnosis_datetime']}", expanded=(idx == 1)):
             mmse_score = record.get("mmse_score")
@@ -2599,29 +2600,30 @@ def patient_detail_page():
 
             similar_patients = record.get("similar_patients", [])
             if similar_patients:
-                df = pd.DataFrame(similar_patients)
-                df = df[
-                    [
-                        "name",
-                        "birthdate",
-                        "gender",
-                        "education",
-                        "main_symptoms",
-                        "similarity_score",
-                        "reference_note",
-                    ]
-                ]
-                df.columns = [
-                    "이름",
-                    "생년월일",
-                    "성별",
-                    "학력 사항",
-                    "주요 증상",
-                    "유사도 점수",
-                    "참고 설명",
-                ]
-                st.dataframe(df, use_container_width=True, hide_index=True)
-
+                # [중요] 새로운 계층형 구조를 표(DataFrame)로 만들기 위한 평탄화 작업
+                flat_data = []
+                for p in similar_patients:
+                    summary = p.get('summary', {})
+                    symptoms = p.get('symptoms', {})
+                    
+                    flat_data.append({
+                        "환자 ID": summary.get('ptid'),
+                        "유사도": f"{summary.get('similarity')}%",
+                        "매칭 시점": f"{summary.get('matched_month')}개월 차",
+                        "보정 MMSE": summary.get('mmse'),
+                        "학력": "고" if summary.get('edu_level') == 2 else "중" if summary.get('edu_level') == 1 else "저",
+                        "공통 증상": ", ".join(symptoms.get('common', []))
+                    })
+                
+                # 데이터프레임 생성 및 출력
+                df_summary = pd.DataFrame(flat_data)
+                st.dataframe(df_summary, use_container_width=True, hide_index=True)
+                
+                # 상세 분석 결과가 있다면 다시 보기 버튼 제공
+                if st.button("이 결과 상세 분석 다시 보기", key=f"hist_review_{idx}"):
+                    # 선택한 이력의 첫 번째 유사 환자 정보를 세션에 담고 리런
+                    st.session_state['selected_detail'] = similar_patients[0]
+                    st.rerun()
 
 # -----------------------------
 # 7. AI 진단 화면
@@ -2750,6 +2752,9 @@ def ai_diagnosis_page():
                 "education": patient["education"],
             }
 
+            # [수정 지점] 구성한 프로필을 세션 스테이트에 저장 (상세 페이지 출력용)
+            st.session_state['patient_profile'] = patient_profile
+
             if fmri_file is not None:
                 fmri_file.seek(0)
 
@@ -2762,7 +2767,7 @@ def ai_diagnosis_page():
                 "mmse_max_score": 30,
                 "symptoms": selected_symptoms,
                 "fmri_filename": fmri_file.name if fmri_file is not None else "업로드 없음",
-                "similar_patients": ai_result["similar_patients"],
+                "similar_patients": ai_result,
             }
 
             save_diagnosis_history(patient["id"], diagnosis_result)
@@ -2771,6 +2776,7 @@ def ai_diagnosis_page():
             st.session_state["latest_diagnosis_patient_id"] = patient["id"]
 
             st.success("진단 결과가 해당 환자의 과거 진단 이력에 저장되었습니다.")
+            st.rerun() # [권장] 결과를 즉시 반영하기 위해 리런 추가
 
     latest_result = st.session_state.get("latest_diagnosis_result")
     latest_patient_id = st.session_state.get("latest_diagnosis_patient_id")
@@ -2785,54 +2791,44 @@ def ai_diagnosis_page():
 # -----------------------------
 def run_ai_diagnosis(patient_profile, symptoms, fmri_file, mmse_score):
     """
-    AI 진단 지원 함수입니다.
-
-    현재는 실제 AI 모델이 완성되지 않았으므로 mock 데이터를 반환합니다.
-    나중에 팀원이 만든 AI 모델 함수 또는 API로 교체할 때는 이 함수 내부만 수정하면 됩니다.
-
-    예시 교체 위치:
-    - model_result = team_model.predict(patient_profile, symptoms, fmri_file, mmse_score)
-    - 또는 requests.post(AI_API_URL, files=..., json=...) 호출
+    AI 진단 지원 함수: 프론트엔드 입력을 AI 엔진으로 전달합니다.
     """
+    from ai.similarity import SimilarityEngine
+    import os
 
-    # TODO: 실제 AI 모델/API 연동 시 아래 mock 결과 생성 로직을 교체하세요.
-    mock_similar_patients = [
-        {
-            "name": "김영희",
-            "birthdate": "1948-03-12",
-            "gender": "여성",
-            "education": "중",
-            "main_symptoms": "AXNAUSEA: 메스꺼움, AXVOMIT: 구토",
-            "similarity_score": "92%",
-            "reference_note": "메스꺼움과 구토 증상 조합이 현재 입력 증상과 높게 유사합니다.",
-        },
-        {
-            "name": "박철수",
-            "birthdate": "1951-07-22",
-            "gender": "남성",
-            "education": "고",
-            "main_symptoms": "AXDIZZY: 어지러움, AXENERGY: 에너지 감소 / 피로감",
-            "similarity_score": "88%",
-            "reference_note": "어지러움과 피로감 양상이 유사 사례군과 근접합니다.",
-        },
-        {
-            "name": "이정자",
-            "birthdate": "1945-11-05",
-            "gender": "여성",
-            "education": "저",
-            "main_symptoms": "AXINSOMN: 불면증, AXFALL: 낙상",
-            "similarity_score": "84%",
-            "reference_note": "불면증과 낙상 관련 증상이 일부 유사합니다.",
-        },
-    ]
+    # 1. 엔진 초기화
+    engine = SimilarityEngine()
 
-    return {
-        "patient_profile": patient_profile,
-        "input_symptoms": symptoms,
-        "input_mmse_score": mmse_score,
-        "fmri_filename": fmri_file.name if fmri_file is not None else None,
-        "similar_patients": mock_similar_patients,
+    # 2. 데이터 형식 변환 (프론트엔드 -> 엔진 규격)
+    # 학력: '고' -> 2, '중' -> 1, '저' -> 0
+    edu_map = {"고": 2, "중": 1, "저": 0}
+    
+    # 엔진이 기대하는 dict 구조 생성
+    input_data = {
+        'EDUCATION_LEVEL': edu_map.get(patient_profile['education'], 0),
+        'MMSE_SCORE': mmse_score
     }
+    
+    # 증상 리스트 ("AXNAUSEA: 메스꺼움")에서 코드("AXNAUSEA")만 추출하여 1로 설정
+    for s in symptoms:
+        code = s.split(':')[0]
+        input_data[code] = 1
+
+    # 3. 업로드된 fMRI 이미지 처리
+    # 엔진은 파일 경로를 요구하므로, 업로드된 파일을 임시로 저장합니다.
+    temp_path = os.path.join("data", "temp_upload.png")
+    if fmri_file is not None:
+        with open(temp_path, "wb") as f:
+            f.write(fmri_file.getbuffer())
+    else:
+        # 이미지가 없을 경우를 대비한 예외 처리 (엔진 로직에 따라 변경 가능)
+        temp_path = None 
+
+    # 4. 실제 AI 엔진 실행 및 결과 반환
+    # 이제 가짜 데이터가 아닌 SimilarityEngine의 결과가 나옵니다.
+    detailed_results = engine.find_top_3_similar(input_data, temp_path)
+    
+    return detailed_results
 
 
 # -----------------------------
@@ -2892,73 +2888,51 @@ def save_diagnosis_history(patient_id, diagnosis_result):
 # -----------------------------
 # 화면 렌더링 보조 함수
 # -----------------------------
-def render_diagnosis_result(diagnosis_result):
-    """AI 진단 결과를 카드와 표 형태로 표시합니다."""
-    section_title("AI 진단 지원 결과", "추천 유사 환자와 유사도 점수를 확인합니다.", "Matching Result")
-    st.warning("이 결과는 데모용 AI 진단 지원 결과이며 실제 의학적 진단을 대체하지 않습니다.")
+def render_diagnosis_result(results_data):
+    """
+    진단 결과를 화면에 렌더링하는 함수입니다.
+    """
+    # run_ai_diagnosis에서 {"similar_patients": [...]} 형태로 반환하므로 리스트를 추출합니다.
+    results = results_data.get("similar_patients", [])
+    
+    st.markdown("### 유사 사례 분석 결과")
+    
+    if not results:
+        st.warning("유사한 환자 사례를 찾을 수 없습니다.")
+        return
 
-    mmse_score = diagnosis_result.get("mmse_score")
-    if mmse_score is not None:
-        st.markdown(
-            f"""
-            <div class="result-card">
-                <div class="result-card-head">
-                    <h4>입력 인지 평가</h4>
-                    <span class="score-pill">MMSE {safe_text(mmse_score)}/30</span>
-                </div>
-                <p class="small-muted">간이 정신상태검사 점수는 유사 사례 매칭 입력값으로 함께 반영되었습니다.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    for idx, item in enumerate(results):
+        # [수정] 이제 정보는 item['summary'] 안에 들어있습니다.
+        summary = item.get('summary', {})
+        symptoms = item.get('symptoms', {})
+        
+        with st.container(border=True):
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                # [수정] similarity_score 대신 summary['similarity'] 사용
+                st.subheader(f"{idx+1}. 환자 {summary.get('ptid')} (일치율: {summary.get('similarity') or 0}%)")
+                
+                # 공통 증상 표시
+                common_syms = symptoms.get('common', [])
+                if common_syms:
+                    st.markdown(f"**공통 증상:** {', '.join(common_syms)}")
+                
+                st.write(f"매칭 시점: {summary.get('matched_month')}개월 차 | 보정 MMSE: {summary.get('mmse')}")
+            
+            with col2:
+                # 상세 페이지로 이동하기 위한 버튼
+                unique_key = f"detail_{idx}_{summary.get('ptid', 'unknown')}"
+                
+                if st.button("상세 분석", key=unique_key):
+                    st.session_state['selected_detail'] = item
+                    st.rerun()
 
-    for idx, item in enumerate(diagnosis_result["similar_patients"], start=1):
-        score_text = item["similarity_score"]
-        score_value = int(score_text.replace("%", ""))
+    # 상세 정보가 선택된 경우 하단에 상세 뷰 렌더링
+    if st.session_state.get('selected_detail') is not None:
+        render_detail_view(st.session_state['selected_detail'])
 
-        st.markdown(
-            f"""
-            <div class="result-card">
-                <div class="result-card-head">
-                    <h4>{idx}. {safe_text(item['name'])}</h4>
-                    <span class="score-pill">유사도 {safe_text(score_text)}</span>
-                </div>
-                <p class="small-muted">
-                    생년월일: {safe_text(item['birthdate'])} &nbsp;|&nbsp;
-                    성별: {safe_text(item['gender'])} &nbsp;|&nbsp;
-                    학력 사항: {safe_text(item['education'])}
-                </p>
-                <p><b>주요 증상:</b> {safe_text(item['main_symptoms'])}</p>
-                <p><b>참고 설명:</b> {safe_text(item['reference_note'])}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.progress(score_value / 100, text=f"유사도 점수 {score_text}")
 
-    with st.expander("표 형태로 결과 보기"):
-        df = pd.DataFrame(diagnosis_result["similar_patients"])
-        df = df[
-            [
-                "name",
-                "birthdate",
-                "gender",
-                "education",
-                "main_symptoms",
-                "similarity_score",
-                "reference_note",
-            ]
-        ]
-        df.columns = [
-            "이름",
-            "생년월일",
-            "성별",
-            "학력 사항",
-            "주요 증상",
-            "유사도 점수",
-            "참고 설명",
-        ]
-        st.dataframe(df, use_container_width=True, hide_index=True)
 
 
 def render_sidebar():
@@ -3033,6 +3007,76 @@ def render_sidebar():
             unsafe_allow_html=True,
         )
 
+def render_detail_view(res):
+    """
+    유사 환자 상세 분석 페이지를 렌더링합니다.
+    """
+    if res is None:
+        return
+
+    st.markdown("---")
+    st.header(f"🔍 환자 {res['summary']['ptid']} 사례 상세 분석 리포트")
+    
+    # 1. 환자 프로필 비교 (Diagnostic vs Similar)
+    st.subheader("👤 환자 프로필 비교")
+    p_col1, p_col2 = st.columns(2)
+    with p_col1:
+        st.markdown("**[진단 중인 환자]**")
+        st.write(f"- 학력 수준: {st.session_state['patient_profile']['education']}")
+        st.write(f"- 보정 MMSE: {res['mmse_chart']['input_patient_score']}점")
+    with p_col2:
+        st.markdown(f"**[유사 환자 {res['summary']['ptid']}]**")
+        st.write(f"- 학력 수준: {'고' if res['summary']['edu_level']==2 else '중' if res['summary']['edu_level']==1 else '저'}")
+        st.write(f"- 매칭 시점 MMSE: {res['summary']['mmse']}점")
+        st.write(f"- 사례 일치율: :green[{res['summary']['similarity']}%]")
+
+    # 2. 공통 증상 하이라이트
+    st.subheader("📋 공통 증상 매칭")
+    common = res['symptoms']['common']
+    if common:
+        # 의료적 매핑 예시 (실제 DB 코드에 맞게 수정 가능)
+        st.success(f"**두 환자에게서 공통으로 나타나는 주요 증상:** {', '.join(common)}")
+    else:
+        st.info("공통으로 나타나는 신체/행동 증상이 없습니다.")
+
+    # 3. MMSE 변화 추이 그래프
+    st.subheader("📈 인지 기능 진행 추이 (MMSE)")
+    history_data = res['mmse_chart']['similar_patient_history']
+    df_history = pd.DataFrame(history_data)
+    df_history.columns = ['Month', 'MMSE']
+    
+    # 그래프 시각화 (유사환자 선 그래프 + 진단환자 현재 점수 점선)
+    st.write("유사 환자의 전체 방문 이력 중 현재 환자와 가장 일치하는 시점을 보여줍니다.")
+    st.line_chart(df_history.set_index('Month'))
+
+    # 4. fMRI 시계열 및 매칭 비교 (핵심 기능)
+    st.subheader("🧠 fMRI 시각적 유사성 대조")
+    st.write("유사 환자의 상태 변화(3~5장)와 진단 환자의 현재 영상을 대조합니다.")
+    
+    sequence = res['fmri_display']['sequence']
+    input_fmri = res['fmri_display']['input_fmri']
+    matched_idx = sequence['matched_idx']
+    
+    # 이미지 가로 나열을 위한 컬럼 생성
+    cols = st.columns(len(sequence['paths']))
+    
+    for i, path in enumerate(sequence['paths']):
+        with cols[i]:
+            is_matched = (i == matched_idx)
+            # 초록색 테두리 스타일 정의
+            border_style = "border: 5px solid #28a745; border-radius: 10px; padding: 5px;" if is_matched else ""
+            
+            # 유사 환자 시퀀스 이미지
+            st.markdown(f"<div style='{border_style}'>", unsafe_allow_html=True)
+            st.image(path, caption=f"유사환자 ({sequence['months'][i]}m)")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            # 매칭된 지점 바로 아래에 진단 환자 이미지 배치 및 강조
+            if is_matched:
+                st.markdown("<p style='text-align:center; color:#28a745; font-weight:bold; margin-top:10px;'>최대 유사 지점 ▼</p>", unsafe_allow_html=True)
+                st.markdown(f"<div style='{border_style}'>", unsafe_allow_html=True)
+                st.image(input_fmri, caption="현재 진단 환자")
+                st.markdown("</div>", unsafe_allow_html=True)
 
 def render_authenticated_page():
     """로그인 이후 좌측 내비게이션과 현재 페이지 본문을 함께 렌더링합니다."""
@@ -3062,6 +3106,14 @@ def render_authenticated_page():
 # 앱 엔트리포인트
 # -----------------------------
 def main():
+    # 세션 상태 초기화 코드 추가
+    if 'patient_profile' not in st.session_state:
+        # 기본값을 빈 딕셔너리로 설정하여 에러 방지
+        st.session_state['patient_profile'] = {'education': '미설정', 'id': 'Unknown'}
+    
+    if 'selected_detail' not in st.session_state:
+        st.session_state['selected_detail'] = None
+        
     init_session_state()
     apply_custom_css()
 

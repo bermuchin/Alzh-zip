@@ -1,0 +1,15 @@
+# 데이터 처리 및 수치 계산
+pandas
+numpy
+scipy
+
+# 이미지 처리 및 AI 모델 (CNN)
+torch
+torchvision
+Pillow
+
+# 유틸리티 (진행률 표시 등)
+tqdm
+
+# 웹 UI (향후 제작 예정)
+streamlit
