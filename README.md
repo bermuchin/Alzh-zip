@@ -10,6 +10,18 @@
 - 의료진 코드 승인 후 계정 생성 흐름 제공
 - 로그인 이후 좌측 내비게이션 기반 환자 워크스페이스 제공
 
+<p align="center">
+  <img src="assets/pageImg/img1.png" width="700" alt="의료진 로그인 화면" />
+  <br />
+  <em>의료진 로그인 및 서비스 소개 화면</em>
+</p>
+
+<p align="center">
+  <img src="assets/pageImg/img2.png" width="520" alt="의료진 계정 생성 화면" />
+  <br />
+  <em>의료진 코드 검증 기반 계정 생성 화면</em>
+</p>
+
 ### 환자 프로필 관리
 
 - 등록 환자 목록 조회
@@ -17,6 +29,12 @@
 - 환자 프로필 추가, 수정, 삭제
 - 환자 상세 정보 조회
 - 환자별 AI 진단 이력 저장 및 재조회
+
+<p align="center">
+  <img src="assets/pageImg/img3.png" width="760" alt="환자 목록 화면" />
+  <br />
+  <em>환자 목록, 검색, 정렬, 프로필 관리 화면</em>
+</p>
 
 ### AI 유사 사례 매칭
 
@@ -30,6 +48,36 @@
   - 공통 증상 및 전체 증상 비교
   - 유사 환자의 MMSE 변화 추이
   - 입력 fMRI와 유사 환자의 fMRI 시퀀스 비교
+
+<p align="center">
+  <img src="assets/pageImg/img4.png" width="700" alt="AI 진단 입력 화면" />
+  <br />
+  <em>MMSE, 증상, fMRI 이미지를 입력하는 AI 진단 화면</em>
+</p>
+
+<p align="center">
+  <img src="assets/pageImg/img5.png" width="760" alt="유사 사례 분석 결과 화면" />
+  <br />
+  <em>유사 환자 Top 3 분석 결과 화면</em>
+</p>
+
+<p align="center">
+  <img src="assets/pageImg/img6.png" width="760" alt="AI 상세 리포트 화면" />
+  <br />
+  <em>선택한 유사 환자의 상세 리포트 화면</em>
+</p>
+
+<p align="center">
+  <img src="assets/pageImg/img7.png" width="760" alt="공통 증상 및 MMSE 변화 추이 화면" />
+  <br />
+  <em>공통 증상과 유사 환자 MMSE 변화 추이 시각화</em>
+</p>
+
+<p align="center">
+  <img src="assets/pageImg/img8.png" width="760" alt="fMRI 시각적 유사도 화면" />
+  <br />
+  <em>입력 fMRI와 유사 환자 fMRI 시퀀스 비교 화면</em>
+</p>
 
 ## AI 매칭 로직 개요
 
@@ -76,7 +124,8 @@
 ├── assets/
 │   ├── logo_remove.png            # 서비스 로고
 │   ├── ch_design.jpg              # UI/브랜딩 이미지
-│   └── ch_view_design.jpg         # UI/브랜딩 이미지
+│   ├── ch_view_design.jpg         # UI/브랜딩 이미지
+│   └── pageImg/                   # README 화면 예시 이미지
 ├── model/
 │   └── features.npy               # 비공개 이미지 특징 인덱스, GitHub 미포함
 └── data/                          # 비공개 임상/fMRI 데이터, GitHub 미포함
