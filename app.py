@@ -2752,6 +2752,9 @@ def ai_diagnosis_page():
                 "education": patient["education"],
             }
 
+            # [수정 지점] 구성한 프로필을 세션 스테이트에 저장 (상세 페이지 출력용)
+            st.session_state['patient_profile'] = patient_profile
+
             if fmri_file is not None:
                 fmri_file.seek(0)
 
@@ -2764,7 +2767,7 @@ def ai_diagnosis_page():
                 "mmse_max_score": 30,
                 "symptoms": selected_symptoms,
                 "fmri_filename": fmri_file.name if fmri_file is not None else "업로드 없음",
-                "similar_patients": ai_result["similar_patients"],
+                "similar_patients": ai_result,
             }
 
             save_diagnosis_history(patient["id"], diagnosis_result)
@@ -2773,6 +2776,7 @@ def ai_diagnosis_page():
             st.session_state["latest_diagnosis_patient_id"] = patient["id"]
 
             st.success("진단 결과가 해당 환자의 과거 진단 이력에 저장되었습니다.")
+            st.rerun() # [권장] 결과를 즉시 반영하기 위해 리런 추가
 
     latest_result = st.session_state.get("latest_diagnosis_result")
     latest_patient_id = st.session_state.get("latest_diagnosis_patient_id")
@@ -2824,7 +2828,7 @@ def run_ai_diagnosis(patient_profile, symptoms, fmri_file, mmse_score):
     # 이제 가짜 데이터가 아닌 SimilarityEngine의 결과가 나옵니다.
     detailed_results = engine.find_top_3_similar(input_data, temp_path)
     
-    return {"similar_patients": detailed_results}
+    return detailed_results
 
 
 # -----------------------------
@@ -2891,7 +2895,7 @@ def render_diagnosis_result(results_data):
     # run_ai_diagnosis에서 {"similar_patients": [...]} 형태로 반환하므로 리스트를 추출합니다.
     results = results_data.get("similar_patients", [])
     
-    st.markdown("### 🎯 유사 사례 분석 결과")
+    st.markdown("### 유사 사례 분석 결과")
     
     if not results:
         st.warning("유사한 환자 사례를 찾을 수 없습니다.")
@@ -2920,7 +2924,7 @@ def render_diagnosis_result(results_data):
                 # 상세 페이지로 이동하기 위한 버튼
                 unique_key = f"detail_{idx}_{summary.get('ptid', 'unknown')}"
                 
-                if st.button("🔍 상세 분석", key=f"detail_{summary.get('ptid')}"):
+                if st.button("상세 분석", key=unique_key):
                     st.session_state['selected_detail'] = item
                     st.rerun()
 
@@ -3019,7 +3023,7 @@ def render_detail_view(res):
     with p_col1:
         st.markdown("**[진단 중인 환자]**")
         st.write(f"- 학력 수준: {st.session_state['patient_profile']['education']}")
-        st.write(f"- 현재 MMSE: {res['mmse_chart']['input_patient_score']}점")
+        st.write(f"- 보정 MMSE: {res['mmse_chart']['input_patient_score']}점")
     with p_col2:
         st.markdown(f"**[유사 환자 {res['summary']['ptid']}]**")
         st.write(f"- 학력 수준: {'고' if res['summary']['edu_level']==2 else '중' if res['summary']['edu_level']==1 else '저'}")
